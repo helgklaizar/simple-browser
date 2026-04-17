@@ -146,7 +146,14 @@ struct ContentView: View {
             Divider()
             
             ZStack {
-                WebView(webView: $webView, urlString: $urlString, zoomLevel: $zoomLevel, favorites: $favorites)
+                WebView(webView: $webView, urlString: $urlString, zoomLevel: $zoomLevel, onToggleFavoriteUrl: { url in
+                    if let idx = favorites.firstIndex(of: url) {
+                        favorites.remove(at: idx)
+                    } else {
+                        favorites.append(url)
+                    }
+                    UserDefaults.standard.set(favorites, forKey: "orionFavorites_Eng")
+                })
                     .background(Color(red: 0.1, green: 0.1, blue: 0.1))
                 
                 if urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -330,6 +337,13 @@ struct ContentView: View {
                                 if (link.dataset.orionUi) return;
                                 link.dataset.orionUi = 'true';
                                 
+                                // Hide 'Open stories'
+                                if (link.innerText.includes('Open stories') || link.innerText.includes('истори')) {
+                                    link.style.display = 'none';
+                                    if (link.parentElement) link.parentElement.style.display = 'none';
+                                    return;
+                                }
+                                
                                 const btn = document.createElement('div');
                                 btn.className = 'orion-star-btn';
                                 btn.innerText = '☆';
@@ -351,8 +365,8 @@ struct ContentView: View {
                             // Rename Twitch's 'For You' header
                             document.querySelectorAll('.tw-title, h2, h5').forEach(h => {
                                 if (h.innerText.includes('For You') || h.innerText.includes('Рекомендуемые')) {
-                                    h.innerText = 'Orion Favorites';
-                                    h.style.color = '#F5C518';
+                                    h.innerText = 'Favorites';
+                                    h.style.color = '#FFFFFF';
                                 }
                             });
                         });
@@ -386,7 +400,7 @@ struct WebView: NSViewRepresentable {
     @Binding var webView: WKWebView
     @Binding var urlString: String
     @Binding var zoomLevel: CGFloat
-    @Binding var favorites: [String]
+    var onToggleFavoriteUrl: (String) -> Void
     
     func makeNSView(context: Context) -> WKWebView {
         webView.navigationDelegate = context.coordinator
@@ -414,12 +428,7 @@ struct WebView: NSViewRepresentable {
             if action == "toggleFavorite" {
                 if !urlStr.hasPrefix("http") { urlStr = "https://www.twitch.tv" + urlStr }
                 DispatchQueue.main.async {
-                    if let idx = self.parent.favorites.firstIndex(of: urlStr) {
-                        self.parent.favorites.remove(at: idx)
-                    } else {
-                        self.parent.favorites.append(urlStr)
-                    }
-                    UserDefaults.standard.set(self.parent.favorites, forKey: "orionFavorites_Eng")
+                    self.parent.onToggleFavoriteUrl(urlStr)
                 }
             }
         }

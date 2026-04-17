@@ -24,14 +24,14 @@ class EngineCore {
 }
 
 @main
-struct MiniOrionApp: App {
+struct AWVApp: App {
     init() {
         // Trigger cache purging immediately on process start
         EngineCore.cleanHeavyCacheData()
     }
     
     var body: some Scene {
-        WindowGroup("Mini Orion") {
+        WindowGroup("AWV") {
             ContentView()
                 .frame(minWidth: 800, minHeight: 600)
         }
@@ -197,6 +197,7 @@ struct ContentView: View {
         window.center()
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        window.setFrameAutosaveName("AWV Window")
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: ContentView(initialUrl: url))
         window.makeKeyAndOrderFront(nil)

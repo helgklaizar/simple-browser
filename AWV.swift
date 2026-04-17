@@ -61,8 +61,6 @@ struct ContentView: View {
         let prefs = WKPreferences()
         prefs.isFraudulentWebsiteWarningEnabled = false
         prefs.javaScriptCanOpenWindowsAutomatically = false
-        prefs.setValue(true, forKey: "acceleratedCompositingEnabled")
-        prefs.setValue(true, forKey: "webGLEnabled")
 
         let config = WKWebViewConfiguration()
         config.preferences = prefs
@@ -80,6 +78,9 @@ struct ContentView: View {
     var isFavorite: Bool {
         store.items.contains(urlString) || store.items.contains(urlString + "/")
     }
+    
+    // Timer to actively garbage collect web blobs every 10 minutes
+    let memSweepTimer = Timer.publish(every: 600, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -170,6 +171,9 @@ struct ContentView: View {
                 loadURL()
             }
         }
+        .onReceive(memSweepTimer) { _ in
+            EngineCore.cleanHeavyCacheData()
+        }
     }
 
     func loadURL() {
@@ -193,7 +197,7 @@ struct ContentView: View {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.setFrameAutosaveName("AWV Window")
-        window.isReleasedWhenClosed = false
+        window.isReleasedWhenClosed = true
         window.contentView = NSHostingView(rootView: ContentView(initialUrl: url))
         window.makeKeyAndOrderFront(nil)
     }

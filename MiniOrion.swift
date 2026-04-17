@@ -1,8 +1,35 @@
 import SwiftUI
 import WebKit
 
+// --- ENGINE SUPERSTRUCTURE ---
+// Singleton for centralized engine operations to reduce memory load
+class EngineCore {
+    static let sharedProcessPool = WKProcessPool()
+    
+    static func cleanHeavyCacheData() {
+        // We purge aggressive caches like media, network requests, disk blobs
+        // but strictly KEEP cookies and local storage so user doesn't lose logins.
+        var typesToClean = WKWebsiteDataStore.allWebsiteDataTypes()
+        typesToClean.remove(WKWebsiteDataTypeCookies)
+        // Keep databases if sites like Twitch rely on them for persistence
+        typesToClean.remove(WKWebsiteDataTypeWebSQLDatabases)
+        typesToClean.remove(WKWebsiteDataTypeIndexedDBDatabases)
+        typesToClean.remove(WKWebsiteDataTypeLocalStorage)
+        typesToClean.remove(WKWebsiteDataTypeSessionStorage)
+        
+        WKWebsiteDataStore.default().removeData(ofTypes: typesToClean, modifiedSince: Date.distantPast) {
+            print("Orion Engine: Cleared unused background cache arrays successfully.")
+        }
+    }
+}
+
 @main
 struct MiniOrionApp: App {
+    init() {
+        // Trigger cache purging immediately on process start
+        EngineCore.cleanHeavyCacheData()
+    }
+    
     var body: some Scene {
         WindowGroup("Mini Orion") {
             ContentView()
@@ -28,6 +55,8 @@ struct ContentView: View {
         // Block autoplay per user request, but safely intercept play() errors in JS so sites don't crash
         config.mediaTypesRequiringUserActionForPlayback = .all
         config.allowsAirPlayForMediaPlayback = true
+        // Assign global process pool to drastically reduce total macOS RAM utilized across IFrames
+        config.processPool = EngineCore.sharedProcessPool
         
         let wv = WKWebView(frame: .zero, configuration: config)
         // Standard user agent to prevent compatibility shims or redirects
@@ -152,11 +181,12 @@ struct ContentView: View {
     }
     
     func setupAdBlocker(completion: @escaping () -> Void) {
+        // Extended Rule List: Mutes trackers and memory sapping telemetry scripts at the network layer itself!
         let ruleList = """
         [
             { 
                 "trigger": { 
-                    "url-filter": ".*(doubleclick|adservices|googlesyndication|criteo|yandex\\\\.ru/ads|mc\\\\.yandex|adriver|relap|tns-counter|top-fwz1|traffic|adocean|pubmatic).*",
+                    "url-filter": ".*(google-analytics|googletagmanager|amplitude|hotjar|mixpanel|sentry|yandex\\\\.ru/metrika|facebook\\\\.com/tr|mc\\\\.yandex|doubleclick|adservices|googlesyndication|criteo|yandex\\\\.ru/ads|adriver|relap|tns-counter|top-fwz1|traffic|adocean|pubmatic).*",
                     "unless-domain": ["twitch.tv", "ttvnw.net", "jtvnw.net", "rezka.ag", "hdrezka.ag", "voidboost.net"]
                 }, 
                 "action": { "type": "block" } 
@@ -212,17 +242,33 @@ struct ContentView: View {
                             document.documentElement.appendChild(style);
                         }
                         
-                        setInterval(() => {
-                            // Kill popups
-                            document.querySelectorAll('div, a').forEach(el => {
-                                const st = window.getComputedStyle(el);
-                                if (st.position === 'fixed' && (st.zIndex == '2147483647' || parseInt(st.bottom) <= 50)) {
-                                    if (st.height !== '100%' && el.offsetHeight < 200) {
-                                        el.style.display = 'none';
-                                    }
+                        // Extremely optimal DOM Popup Killer built on Passive MutationObservers (0 CPU when Idle)
+                        const checkNode = (el) => {
+                            if (el.nodeType !== 1) return;
+                            const st = window.getComputedStyle(el);
+                            if (st.position === 'fixed' && (st.zIndex == '2147483647' || parseInt(st.bottom) <= 50)) {
+                                if (st.height !== '100%' && el.offsetHeight < 200) {
+                                    el.style.display = 'none';
                                 }
+                            }
+                        };
+                        
+                        // First sweep on page load
+                        document.querySelectorAll('div, a').forEach(checkNode);
+                        
+                        // Passive watcher for newly injected ad-nodes
+                        const observer = new MutationObserver((mutations) => {
+                            mutations.forEach(m => {
+                                m.addedNodes.forEach(node => {
+                                    if (node.nodeType === 1) { // ELEMENT_NODE
+                                        if (node.tagName === 'DIV' || node.tagName === 'A') checkNode(node);
+                                        // Sweep nested items if it's a giant container
+                                        node.querySelectorAll('div, a').forEach(checkNode);
+                                    }
+                                });
                             });
-                        }, 1000);
+                        });
+                        if (document.body) observer.observe(document.body, { childList: true, subtree: true });
                     }
                 """
                 let script = WKUserScript(source: scriptSource, injectionTime: .atDocumentEnd, forMainFrameOnly: false)

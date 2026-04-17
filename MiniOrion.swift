@@ -40,8 +40,12 @@ struct MiniOrionApp: App {
 }
 
 struct ContentView: View {
-    @State private var urlString: String = ""
+    @State private var urlString: String
     @State private var zoomLevel: CGFloat = 1.0
+    
+    init(initialUrl: String = "") {
+        _urlString = State(initialValue: initialUrl)
+    }
     
     @State private var webView: WKWebView = {
         let prefs = WKPreferences()
@@ -108,17 +112,24 @@ struct ContentView: View {
                 
                 Divider().frame(height: 14)
                 
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
                     ForEach(favorites, id: \.self) { favUrl in
-                        Button(action: { urlString = favUrl; loadURL() }) {
+                        ZStack {
                             AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?sz=64&domain_url=\(favUrl)")) { image in
                                 image.resizable()
                             } placeholder: { Color.gray.opacity(0.3) }
                             .frame(width: 16, height: 16)
                             .cornerRadius(4)
+                            
+                            MiddleClickLayer(onLeftClick: {
+                                urlString = favUrl
+                                loadURL()
+                            }, onMiddleClick: {
+                                openNewWindow(url: favUrl)
+                            })
                         }
-                        .buttonStyle(PlainButtonStyle())
-                        .help("Open \(favUrl)")
+                        .frame(width: 20, height: 20)
+                        .help("Open \(favUrl) (Middle-click for New Window)")
                         .contextMenu {
                             Button("Remove") {
                                 favorites.removeAll { $0 == favUrl }
@@ -169,6 +180,19 @@ struct ContentView: View {
         if let url = URL(string: str) {
             webView.load(URLRequest(url: url))
         }
+    }
+    
+    func openNewWindow(url: String) {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered, defer: false)
+        window.center()
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: ContentView(initialUrl: url))
+        window.makeKeyAndOrderFront(nil)
     }
     
     func toggleFavorite() {
@@ -413,6 +437,43 @@ struct WebView: NSViewRepresentable {
                  }
             }
             return nil
+        }
+    }
+}
+
+struct MiddleClickLayer: NSViewRepresentable {
+    var onLeftClick: () -> Void
+    var onMiddleClick: () -> Void
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = MouseTrackingView()
+        view.onLeftClick = onLeftClick
+        view.onMiddleClick = onMiddleClick
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.clear.cgColor
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+class MouseTrackingView: NSView {
+    var onLeftClick: (() -> Void)?
+    var onMiddleClick: (() -> Void)?
+    
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // Intercept clicks directly
+        return self.bounds.contains(point) ? self : nil
+    }
+    
+    override func mouseUp(with event: NSEvent) {
+        onLeftClick?()
+    }
+    
+    override func otherMouseUp(with event: NSEvent) {
+        if event.buttonNumber == 2 {
+            onMiddleClick?()
+        } else {
+            super.otherMouseUp(with: event)
         }
     }
 }

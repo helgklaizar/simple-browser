@@ -73,8 +73,8 @@ struct ContentView: View {
         config.processPool = EngineCore.sharedProcessPool
         
         let wv = WKWebView(frame: .zero, configuration: config)
-        // Standard user agent to prevent compatibility shims or redirects
-        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
+        // Hardcoded Chrome User-Agent drastically improves OAuth / Twitch login compatibility natively.
+        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
         wv.allowsBackForwardNavigationGestures = true
         wv.allowsMagnification = true
         wv.setValue(false, forKey: "drawsBackground")

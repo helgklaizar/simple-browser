@@ -39,9 +39,19 @@ struct AWVApp: App {
     }
 }
 
+class FavoritesStore: ObservableObject {
+    static let shared = FavoritesStore()
+    @Published var items: [String] = UserDefaults.standard.stringArray(forKey: "orionFavorites_Eng") ?? [] {
+        didSet {
+            UserDefaults.standard.set(items, forKey: "orionFavorites_Eng")
+        }
+    }
+}
+
 struct ContentView: View {
     @State private var urlString: String
     @State private var zoomLevel: CGFloat = 1.0
+    @ObservedObject private var store = FavoritesStore.shared
     
     init(initialUrl: String = "") {
         _urlString = State(initialValue: initialUrl)
@@ -71,11 +81,8 @@ struct ContentView: View {
         return wv
     }()
     
-    // Changed key to act as a database reset - your old favorites are wiped from the UI completely!
-    @State private var favorites: [String] = UserDefaults.standard.stringArray(forKey: "orionFavorites_Eng") ?? []
-
     var isFavorite: Bool {
-        favorites.contains(urlString)
+        store.items.contains(urlString) || store.items.contains(urlString + "/")
     }
 
     var body: some View {
@@ -113,7 +120,7 @@ struct ContentView: View {
                 Divider().frame(height: 14)
                 
                 HStack(spacing: 12) {
-                    ForEach(favorites, id: \.self) { favUrl in
+                    ForEach(store.items, id: \.self) { favUrl in
                         ZStack {
                             AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?sz=64&domain_url=\(favUrl)")) { image in
                                 image.resizable()
@@ -132,8 +139,7 @@ struct ContentView: View {
                         .help("Open \(favUrl) (Middle-click for New Window)")
                         .contextMenu {
                             Button("Remove") {
-                                favorites.removeAll { $0 == favUrl }
-                                UserDefaults.standard.set(favorites, forKey: "orionFavorites_Eng")
+                                store.items.removeAll { $0 == favUrl }
                             }
                         }
                     }
@@ -150,8 +156,8 @@ struct ContentView: View {
                     .background(Color(red: 0.1, green: 0.1, blue: 0.1))
                 
                 if urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    FavoritesGridView(favorites: $favorites) { selectedUrl in
-                        urlString = selectedUrl
+                    FavoritesGridView(favorites: $store.items) { url in
+                        urlString = url
                         loadURL()
                     }
                 }
@@ -198,11 +204,10 @@ struct ContentView: View {
     
     func toggleFavorite() {
         if isFavorite {
-            favorites.removeAll { $0 == urlString }
+            store.items.removeAll { $0 == urlString || $0 == urlString + "/" }
         } else {
-            favorites.append(urlString)
+            store.items.append(urlString)
         }
-        UserDefaults.standard.set(favorites, forKey: "orionFavorites_Eng")
     }
     
     func setupAdBlocker(completion: @escaping () -> Void) {

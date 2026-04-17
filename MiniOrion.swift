@@ -135,7 +135,7 @@ struct ContentView: View {
             Divider()
             
             ZStack {
-                WebView(webView: $webView, urlString: $urlString, zoomLevel: $zoomLevel)
+                WebView(webView: $webView, urlString: $urlString, zoomLevel: $zoomLevel, favorites: $favorites)
                     .background(Color(red: 0.1, green: 0.1, blue: 0.1))
                 
                 if urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -270,6 +270,63 @@ struct ContentView: View {
                         });
                         if (document.body) observer.observe(document.body, { childList: true, subtree: true });
                     }
+                    
+                    // --- TWITCH NATIVE INJECTION ---
+                    if (window.location.hostname.includes('twitch.tv')) {
+                        const style = document.createElement('style');
+                        style.innerHTML = `
+                            .orion-star-btn {
+                                position: absolute;
+                                right: 10px;
+                                top: 50%;
+                                transform: translateY(-50%);
+                                z-index: 1000;
+                                cursor: pointer;
+                                font-size: 14px;
+                                padding: 4px;
+                                border-radius: 4px;
+                                transition: 0.2s;
+                                color: #ccc;
+                            }
+                            .orion-star-btn:hover { color: #F5C518; transform: translateY(-50%) scale(1.2); }
+                        `;
+                        if (document.documentElement) document.documentElement.appendChild(style);
+                        
+                        const twObserver = new MutationObserver(() => {
+                            // Find Sidebar items
+                            document.querySelectorAll('a[data-a-target="side-nav-card-link"], a[data-test-selector="followed-channel"]').forEach(link => {
+                                if (link.dataset.orionUi) return;
+                                link.dataset.orionUi = 'true';
+                                link.style.position = 'relative';
+                                
+                                const btn = document.createElement('div');
+                                btn.className = 'orion-star-btn';
+                                btn.innerText = '☆';
+                                btn.title = 'Add to Orion Favorites';
+                                btn.onclick = (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (window.webkit && window.webkit.messageHandlers.orionInterop) {
+                                        // Communicate natively back to Swift App
+                                        window.webkit.messageHandlers.orionInterop.postMessage({action: 'toggleFavorite', url: link.href});
+                                    }
+                                    btn.innerText = '⭐'; // Visual feedback
+                                    btn.style.transform = 'translateY(-50%) scale(1.4)';
+                                    setTimeout(() => btn.style.transform = 'translateY(-50%) scale(1)', 200);
+                                };
+                                link.appendChild(btn);
+                            });
+                            
+                            // Rename Twitch's 'For You' header
+                            document.querySelectorAll('.tw-title, h2, h5').forEach(h => {
+                                if (h.innerText.includes('For You') || h.innerText.includes('Рекомендуемые')) {
+                                    h.innerText = 'Orion Favorites';
+                                    h.style.color = '#F5C518';
+                                }
+                            });
+                        });
+                        if (document.body) twObserver.observe(document.body, { childList: true, subtree: true });
+                    }
                 """
                 let script = WKUserScript(source: scriptSource, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
                 self.webView.configuration.userContentController.removeAllUserScripts()
@@ -298,10 +355,12 @@ struct WebView: NSViewRepresentable {
     @Binding var webView: WKWebView
     @Binding var urlString: String
     @Binding var zoomLevel: CGFloat
+    @Binding var favorites: [String]
     
     func makeNSView(context: Context) -> WKWebView {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
+        webView.configuration.userContentController.add(context.coordinator, name: "orionInterop")
         return webView
     }
     func updateNSView(_ nsView: WKWebView, context: Context) {
@@ -311,9 +370,28 @@ struct WebView: NSViewRepresentable {
     }
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     
-    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         var parent: WebView
         var urlObservation: NSKeyValueObservation?
+        
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "orionInterop",
+                  let dict = message.body as? [String: String],
+                  let action = dict["action"],
+                  var urlStr = dict["url"] else { return }
+            
+            if action == "toggleFavorite" {
+                if !urlStr.hasPrefix("http") { urlStr = "https://www.twitch.tv" + urlStr }
+                DispatchQueue.main.async {
+                    if let idx = self.parent.favorites.firstIndex(of: urlStr) {
+                        self.parent.favorites.remove(at: idx)
+                    } else {
+                        self.parent.favorites.append(urlStr)
+                    }
+                    UserDefaults.standard.set(self.parent.favorites, forKey: "orionFavorites_Eng")
+                }
+            }
+        }
         
         init(_ parent: WebView) { 
             self.parent = parent 

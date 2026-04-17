@@ -146,14 +146,7 @@ struct ContentView: View {
             Divider()
             
             ZStack {
-                WebView(webView: $webView, urlString: $urlString, zoomLevel: $zoomLevel, onToggleFavoriteUrl: { url in
-                    if let idx = favorites.firstIndex(of: url) {
-                        favorites.remove(at: idx)
-                    } else {
-                        favorites.append(url)
-                    }
-                    UserDefaults.standard.set(favorites, forKey: "orionFavorites_Eng")
-                })
+                WebView(webView: $webView, urlString: $urlString, zoomLevel: $zoomLevel)
                     .background(Color(red: 0.1, green: 0.1, blue: 0.1))
                 
                 if urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -327,29 +320,14 @@ struct ContentView: View {
                             button[aria-label="Más"] {
                                 display: none !important;
                             }
-                            
-                            .orion-star-btn {
-                                z-index: 1000;
-                                cursor: pointer;
-                                font-size: 16px;
-                                padding: 0 4px;
-                                margin-left: 2px;
-                                margin-right: 4px;
-                                transition: 0.2s;
-                                color: #ccc;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                            }
-                            .orion-star-btn:hover { color: #F5C518; transform: scale(1.2); }
                         `;
                         if (document.documentElement) document.documentElement.appendChild(style);
                         
                         const twObserver = new MutationObserver(() => {
-                            // Find Sidebar items
+                            // Find Sidebar items to hide Open stories
                             document.querySelectorAll('a[data-a-target="side-nav-card-link"], a[data-test-selector="followed-channel"]').forEach(link => {
-                                if (link.dataset.orionUi) return;
-                                link.dataset.orionUi = 'true';
+                                if (link.dataset.awvUi) return;
+                                link.dataset.awvUi = 'true';
                                 
                                 // Hide 'Open stories'
                                 if (link.innerText.includes('Open stories') || link.innerText.includes('истори')) {
@@ -357,23 +335,6 @@ struct ContentView: View {
                                     if (link.parentElement) link.parentElement.style.display = 'none';
                                     return;
                                 }
-                                
-                                const btn = document.createElement('div');
-                                btn.className = 'orion-star-btn';
-                                btn.innerText = '☆';
-                                btn.title = 'Add to Orion Favorites';
-                                btn.onclick = (e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    if (window.webkit && window.webkit.messageHandlers.orionInterop) {
-                                        window.webkit.messageHandlers.orionInterop.postMessage({action: 'toggleFavorite', url: link.href});
-                                    }
-                                    btn.innerText = '⭐'; 
-                                    btn.style.transform = 'scale(1.4)';
-                                    setTimeout(() => btn.style.transform = 'scale(1)', 200);
-                                };
-                                // Prepend places it cleanly on the very left via flex layout without absolute position overlaps!
-                                link.prepend(btn);
                             });
                             
                             // Rename Twitch's 'For You' header
@@ -414,12 +375,10 @@ struct WebView: NSViewRepresentable {
     @Binding var webView: WKWebView
     @Binding var urlString: String
     @Binding var zoomLevel: CGFloat
-    var onToggleFavoriteUrl: (String) -> Void
     
     func makeNSView(context: Context) -> WKWebView {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
-        webView.configuration.userContentController.add(context.coordinator, name: "orionInterop")
         return webView
     }
     func updateNSView(_ nsView: WKWebView, context: Context) {
@@ -429,23 +388,9 @@ struct WebView: NSViewRepresentable {
     }
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     
-    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var parent: WebView
         var urlObservation: NSKeyValueObservation?
-        
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.name == "orionInterop",
-                  let dict = message.body as? [String: String],
-                  let action = dict["action"],
-                  var urlStr = dict["url"] else { return }
-            
-            if action == "toggleFavorite" {
-                if !urlStr.hasPrefix("http") { urlStr = "https://www.twitch.tv" + urlStr }
-                DispatchQueue.main.async {
-                    self.parent.onToggleFavoriteUrl(urlStr)
-                }
-            }
-        }
         
         init(_ parent: WebView) { 
             self.parent = parent 

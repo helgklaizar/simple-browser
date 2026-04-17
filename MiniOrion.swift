@@ -17,8 +17,21 @@ struct ContentView: View {
     @State private var zoomLevel: CGFloat = 1.0
     
     @State private var webView: WKWebView = {
+        let prefs = WKPreferences()
+        prefs.isFraudulentWebsiteWarningEnabled = false
+        prefs.javaScriptCanOpenWindowsAutomatically = false
+        prefs.setValue(true, forKey: "acceleratedCompositingEnabled")
+        prefs.setValue(true, forKey: "webGLEnabled")
+
         let config = WKWebViewConfiguration()
+        config.preferences = prefs
+        // Allow automatic video playback to prevent Twitch player fallback reloads!
+        config.mediaTypesRequiringUserActionForPlayback = []
+        config.allowsAirPlayForMediaPlayback = true
+        
         let wv = WKWebView(frame: .zero, configuration: config)
+        // Standard user agent to prevent compatibility shims or redirects
+        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
         wv.allowsBackForwardNavigationGestures = true
         wv.allowsMagnification = true
         wv.setValue(false, forKey: "drawsBackground")
@@ -228,10 +241,6 @@ struct WebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
-        let prefs = WKPreferences()
-        prefs.isFraudulentWebsiteWarningEnabled = false
-        prefs.javaScriptCanOpenWindowsAutomatically = false
-        webView.configuration.preferences = prefs
         return webView
     }
     func updateNSView(_ nsView: WKWebView, context: Context) {

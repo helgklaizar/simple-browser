@@ -60,7 +60,7 @@ struct ContentView: View {
     @State private var webView: WKWebView = {
         let prefs = WKPreferences()
         prefs.isFraudulentWebsiteWarningEnabled = false
-        prefs.javaScriptCanOpenWindowsAutomatically = true
+        prefs.javaScriptCanOpenWindowsAutomatically = false
 
         let config = WKWebViewConfiguration()
         config.preferences = prefs
@@ -418,18 +418,24 @@ struct WebView: NSViewRepresentable {
             if let url = webView.url?.absoluteString, url != "about:blank" { parent.urlString = url }
         }
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-            // Intercept popup/new window requests and spawn them as native independent macOS windows
+            // ONLY intercept explicit user-initiated link clicks designed for new windows (target="_blank").
+            // This prevents malicious ad scripts from looping infinite windows automatically.
             if let url = navigationAction.request.url {
-                DispatchQueue.main.async {
-                    let window = NSWindow(
-                        contentRect: NSRect(x: 100, y: 100, width: 1200, height: 800),
-                        styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-                        backing: .buffered, defer: false)
-                    window.titlebarAppearsTransparent = true
-                    window.titleVisibility = .hidden
-                    window.isReleasedWhenClosed = true
-                    window.contentView = NSHostingView(rootView: ContentView(initialUrl: url.absoluteString))
-                    window.makeKeyAndOrderFront(nil)
+                if navigationAction.navigationType == .linkActivated || navigationAction.navigationType == .other {
+                    // Check if it's truly a main frame missing request to avoid hidden iframe spawn-loops
+                    if navigationAction.targetFrame == nil {
+                        DispatchQueue.main.async {
+                            let window = NSWindow(
+                                contentRect: NSRect(x: 100, y: 100, width: 1000, height: 700),
+                                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                                backing: .buffered, defer: false)
+                            window.titlebarAppearsTransparent = true
+                            window.titleVisibility = .hidden
+                            window.isReleasedWhenClosed = true
+                            window.contentView = NSHostingView(rootView: ContentView(initialUrl: url.absoluteString))
+                            window.makeKeyAndOrderFront(nil)
+                        }
+                    }
                 }
             }
             return nil

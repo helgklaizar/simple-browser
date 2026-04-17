@@ -299,20 +299,28 @@ struct ContentView: View {
                     if (window.location.hostname.includes('twitch.tv')) {
                         const style = document.createElement('style');
                         style.innerHTML = `
+                            /* Hide Twitch More (3-dots) globally */
+                            [data-a-target="top-nav-more-button"],
+                            button[aria-label="More"],
+                            button[aria-label="Больше"],
+                            button[aria-label="Más"] {
+                                display: none !important;
+                            }
+                            
                             .orion-star-btn {
-                                position: absolute;
-                                right: 10px;
-                                top: 50%;
-                                transform: translateY(-50%);
                                 z-index: 1000;
                                 cursor: pointer;
-                                font-size: 14px;
-                                padding: 4px;
-                                border-radius: 4px;
+                                font-size: 16px;
+                                padding: 0 4px;
+                                margin-left: 2px;
+                                margin-right: 4px;
                                 transition: 0.2s;
                                 color: #ccc;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
                             }
-                            .orion-star-btn:hover { color: #F5C518; transform: translateY(-50%) scale(1.2); }
+                            .orion-star-btn:hover { color: #F5C518; transform: scale(1.2); }
                         `;
                         if (document.documentElement) document.documentElement.appendChild(style);
                         
@@ -321,7 +329,6 @@ struct ContentView: View {
                             document.querySelectorAll('a[data-a-target="side-nav-card-link"], a[data-test-selector="followed-channel"]').forEach(link => {
                                 if (link.dataset.orionUi) return;
                                 link.dataset.orionUi = 'true';
-                                link.style.position = 'relative';
                                 
                                 const btn = document.createElement('div');
                                 btn.className = 'orion-star-btn';
@@ -331,14 +338,14 @@ struct ContentView: View {
                                     e.preventDefault();
                                     e.stopPropagation();
                                     if (window.webkit && window.webkit.messageHandlers.orionInterop) {
-                                        // Communicate natively back to Swift App
                                         window.webkit.messageHandlers.orionInterop.postMessage({action: 'toggleFavorite', url: link.href});
                                     }
-                                    btn.innerText = '⭐'; // Visual feedback
-                                    btn.style.transform = 'translateY(-50%) scale(1.4)';
-                                    setTimeout(() => btn.style.transform = 'translateY(-50%) scale(1)', 200);
+                                    btn.innerText = '⭐'; 
+                                    btn.style.transform = 'scale(1.4)';
+                                    setTimeout(() => btn.style.transform = 'scale(1)', 200);
                                 };
-                                link.appendChild(btn);
+                                // Prepend places it cleanly on the very left via flex layout without absolute position overlaps!
+                                link.prepend(btn);
                             });
                             
                             // Rename Twitch's 'For You' header

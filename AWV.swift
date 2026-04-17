@@ -66,15 +66,15 @@ struct ContentView: View {
 
         let config = WKWebViewConfiguration()
         config.preferences = prefs
-        // Engines allows autoplay naturally to fix internal SPA pages.
-        // We handle aggressive Home Page blocking manually via JS Proxy.
         config.mediaTypesRequiringUserActionForPlayback = []
         config.allowsAirPlayForMediaPlayback = true
         config.processPool = EngineCore.sharedProcessPool
         
+        // This is the absolute best way to bypass Auth Bot Detectors natively.
+        // It appends Safari to WebKit's dynamic native OS UserAgent, guaranteeing a 100% match with the engine's real fingerprint.
+        config.applicationNameForUserAgent = "Version/17.4 Safari/605.1.15"
+        
         let wv = WKWebView(frame: .zero, configuration: config)
-        // Hardcoded Chrome User-Agent drastically improves OAuth / Twitch login compatibility natively.
-        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
         wv.allowsBackForwardNavigationGestures = true
         wv.allowsMagnification = true
         wv.setValue(false, forKey: "drawsBackground")

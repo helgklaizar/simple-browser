@@ -25,8 +25,8 @@ struct ContentView: View {
 
         let config = WKWebViewConfiguration()
         config.preferences = prefs
-        // Allow automatic video playback to prevent Twitch player fallback reloads!
-        config.mediaTypesRequiringUserActionForPlayback = []
+        // Block autoplay per user request, but safely intercept play() errors in JS so sites don't crash
+        config.mediaTypesRequiringUserActionForPlayback = .all
         config.allowsAirPlayForMediaPlayback = true
         
         let wv = WKWebView(frame: .zero, configuration: config)
@@ -171,6 +171,21 @@ struct ContentView: View {
                 }
                 
                 let scriptSource = """
+                    // Safe Autoplay Blocker: prevent modern SPAs (Twitch) from panicking when WebKit blocks autoplay
+                    const _origPlay = HTMLMediaElement.prototype.play;
+                    HTMLMediaElement.prototype.play = function() {
+                        const promise = _origPlay.apply(this, arguments);
+                        if (promise !== undefined) {
+                            promise.catch(err => {
+                                if (err.name === 'NotAllowedError') {
+                                    // Soft-swallow Safari's autoplay rejection to stop 'Unhandled Promise Rejection' crashes
+                                    console.log('Orion: Autoplay halted safely.');
+                                }
+                            });
+                        }
+                        return promise;
+                    };
+
                     if (window.location.hostname.includes('rezka.ag') || window.location.hostname.includes('hdrezka')) {
                         var style = document.createElement('style');
                         style.innerHTML = `

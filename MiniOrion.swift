@@ -56,10 +56,10 @@ struct ContentView: View {
 
         let config = WKWebViewConfiguration()
         config.preferences = prefs
-        // Block autoplay per user request, but safely intercept play() errors in JS so sites don't crash
-        config.mediaTypesRequiringUserActionForPlayback = .all
+        // Engines allows autoplay naturally to fix internal SPA pages.
+        // We handle aggressive Home Page blocking manually via JS Proxy.
+        config.mediaTypesRequiringUserActionForPlayback = []
         config.allowsAirPlayForMediaPlayback = true
-        // Assign global process pool to drastically reduce total macOS RAM utilized across IFrames
         config.processPool = EngineCore.sharedProcessPool
         
         let wv = WKWebView(frame: .zero, configuration: config)
@@ -232,20 +232,33 @@ struct ContentView: View {
                 }
                 
                 let scriptSource = """
-                    // Safe Autoplay Blocker: prevent modern SPAs (Twitch) from panicking when WebKit blocks autoplay
+                    // --- NATIVE AUTOPLAY PROXY ---
                     const _origPlay = HTMLMediaElement.prototype.play;
                     HTMLMediaElement.prototype.play = function() {
+                        // Strictly block loud autoplay on the Twitch Home Page
+                        let isTwitchHome = window.location.hostname.includes('twitch.tv') && window.location.pathname === '/';
+                        
+                        if (isTwitchHome && !window._orionPlayOverride) {
+                            this.pause(); // Ensure data stream is halted
+                            return Promise.resolve();
+                        }
+                        
                         const promise = _origPlay.apply(this, arguments);
-                        if (promise !== undefined) {
+                        if (promise) {
                             promise.catch(err => {
-                                if (err.name === 'NotAllowedError') {
-                                    // Soft-swallow Safari's autoplay rejection to stop 'Unhandled Promise Rejection' crashes
-                                    console.log('Orion: Autoplay halted safely.');
-                                }
+                                if (err.name === 'NotAllowedError') console.log('Orion: Safely handled engine rejection.');
                             });
                         }
-                        return promise;
+                        return promise || Promise.resolve();
                     };
+                    
+                    window.addEventListener('mousedown', (e) => {
+                        // Allow overriding the home-page blocker if the user explicitly clicked the Play button
+                        if (e.target.closest('[data-a-target="player-play-pause-button"]') || e.target.closest('.player-controls__left-control-group')) {
+                            window._orionPlayOverride = true;
+                            setTimeout(() => window._orionPlayOverride = false, 1500);
+                        }
+                    }, true);
 
                     if (window.location.hostname.includes('rezka.ag') || window.location.hostname.includes('hdrezka')) {
                         var style = document.createElement('style');

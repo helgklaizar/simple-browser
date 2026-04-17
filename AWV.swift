@@ -53,27 +53,30 @@ struct ContentView: View {
     @State private var zoomLevel: CGFloat = 1.0
     @ObservedObject private var store = FavoritesStore.shared
     
-    init(initialUrl: String = "") {
-        _urlString = State(initialValue: initialUrl)
-    }
+    @State private var webView: WKWebView
     
-    @State private var webView: WKWebView = {
-        let prefs = WKPreferences()
-        prefs.isFraudulentWebsiteWarningEnabled = false
-        prefs.javaScriptCanOpenWindowsAutomatically = false
-
-        let config = WKWebViewConfiguration()
-        config.preferences = prefs
-        config.mediaTypesRequiringUserActionForPlayback = []
-        config.allowsAirPlayForMediaPlayback = true
-        config.processPool = EngineCore.sharedProcessPool
+    init(initialUrl: String = "", preloadedWebView: WKWebView? = nil) {
+        _urlString = State(initialValue: initialUrl)
         
-        let wv = WKWebView(frame: .zero, configuration: config)
-        wv.allowsBackForwardNavigationGestures = true
-        wv.allowsMagnification = true
-        wv.setValue(false, forKey: "drawsBackground")
-        return wv
-    }()
+        if let preloaded = preloadedWebView {
+            _webView = State(initialValue: preloaded)
+        } else {
+            let prefs = WKPreferences()
+            prefs.isFraudulentWebsiteWarningEnabled = false
+            prefs.javaScriptCanOpenWindowsAutomatically = true
+
+            let config = WKWebViewConfiguration()
+            config.preferences = prefs
+            config.mediaTypesRequiringUserActionForPlayback = []
+            config.allowsAirPlayForMediaPlayback = true
+            
+            let wv = WKWebView(frame: .zero, configuration: config)
+            wv.allowsBackForwardNavigationGestures = true
+            wv.allowsMagnification = true
+            wv.setValue(false, forKey: "drawsBackground")
+            _webView = State(initialValue: wv)
+        }
+    }
     
     var isFavorite: Bool {
         store.items.contains(urlString) || store.items.contains(urlString + "/")
@@ -224,7 +227,8 @@ struct ContentView: View {
         ]
         """
         
-        WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "SniperAdBlock", encodedContentRuleList: ruleList) { rules, error in
+        let ruleId = "SniperAdBlock-\(UUID().uuidString)"
+        WKContentRuleListStore.default().compileContentRuleList(forIdentifier: ruleId, encodedContentRuleList: ruleList) { rules, error in
             DispatchQueue.main.async { 
                 if let rules = rules {
                     self.webView.configuration.userContentController.add(rules) 
@@ -418,27 +422,26 @@ struct WebView: NSViewRepresentable {
             if let url = webView.url?.absoluteString, url != "about:blank" { parent.urlString = url }
         }
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-            // ONLY intercept explicit user-initiated link clicks designed for new windows (target="_blank").
-            // This prevents malicious ad scripts from looping infinite windows automatically.
-            if let url = navigationAction.request.url {
-                if navigationAction.navigationType == .linkActivated || navigationAction.navigationType == .other {
-                    // Check if it's truly a main frame missing request to avoid hidden iframe spawn-loops
-                    if navigationAction.targetFrame == nil {
-                        DispatchQueue.main.async {
-                            let window = NSWindow(
-                                contentRect: NSRect(x: 100, y: 100, width: 1000, height: 700),
-                                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-                                backing: .buffered, defer: false)
-                            window.titlebarAppearsTransparent = true
-                            window.titleVisibility = .hidden
-                            window.isReleasedWhenClosed = true
-                            window.contentView = NSHostingView(rootView: ContentView(initialUrl: url.absoluteString))
-                            window.makeKeyAndOrderFront(nil)
-                        }
-                    }
-                }
+            let newWebView = WKWebView(frame: .zero, configuration: configuration)
+            newWebView.uiDelegate = self
+            
+            // Allow JavaScript to receive the valid WKWebView popup reference to prevent it from forcing a parent fallback redirection.
+            // Wrap the WebKit engine in our SwiftUI layout asynchronously.
+            DispatchQueue.main.async {
+                let window = NSWindow(
+                    contentRect: NSRect(x: 100, y: 100, width: 1000, height: 700),
+                    styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                    backing: .buffered, defer: false)
+                window.titlebarAppearsTransparent = true
+                window.titleVisibility = .hidden
+                window.isReleasedWhenClosed = true
+                
+                let targetURL = navigationAction.request.url?.absoluteString ?? ""
+                window.contentView = NSHostingView(rootView: ContentView(initialUrl: targetURL, preloadedWebView: newWebView))
+                window.makeKeyAndOrderFront(nil)
             }
-            return nil
+            
+            return newWebView
         }
     }
 }

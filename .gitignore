@@ -1,0 +1,10 @@
+.DS_Store
+MiniOrion.app/
+*.o
+*.out
+*.dylib
+.gemini/
+.agents/
+docs/sprints/
+build/
+MyIcon.iconset/

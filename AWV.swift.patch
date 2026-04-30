@@ -1,0 +1,13 @@
+        // Extended Rule List: Mimics Declarative Net Request for tracking and ad-networks.
+        let ruleList = """
+        [
+            { 
+                "trigger": { "url-filter": ".*(google-analytics|googletagmanager|amplitude|hotjar|mixpanel|sentry|yandex\\\\.ru/metrika|facebook\\\\.com/tr|mc\\\\.yandex|doubleclick|adservices|googlesyndication|criteo|yandex\\\\.ru/ads|adriver|relap|tns-counter|top-fwz1|traffic|adocean|pubmatic).*" }, 
+                "action": { "type": "block" } 
+            },
+            {
+                "trigger": { "url-filter": ".*(1xbet|melbet|betwinner|casino|bongacams|adk2|popunder|clickunder).*" },
+                "action": { "type": "block" }
+            }
+        ]
+        """

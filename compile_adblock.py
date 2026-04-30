@@ -34,10 +34,7 @@ for line in lines:
             rules.append({
                 "trigger": {
                     "url-filter": f".*{domain.replace('.', '\\\\.')}.*",
-                    "unless-domain": [
-                        "twitch.tv", "ttvnw.net", "jtvnw.net", "ext-twitch.tv", "twitchcdn.net",
-                        "rezka.ag", "voidboost.net", "voidboost.cc", "kodik.info"
-                    ]
+                    "unless-domain": ["twitch.tv", "ttvnw.net", "jtvnw.net", "ext-twitch.tv"] # Twitch breaks natively without proxy, so leave it excluded, but let everything apply to Rezka
                 },
                 "action": {"type": "block"}
             })

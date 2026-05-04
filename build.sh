@@ -16,5 +16,11 @@ codesign --force --deep --sign - AWV.app
 echo "Deploying to /Applications..."
 cp -R AWV.app /Applications/
 
-echo "Build successful! AWV is now in your Applications folder."
+# Package for OTA Updates (Sparkle / GitHub Releases)
+echo "Packaging for OTA updates..."
+mkdir -p releases
+VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" AWV.app/Contents/Info.plist 2>/dev/null || echo "1.0.0")
+zip -q -r "releases/AWV-v${VERSION}.zip" AWV.app
+echo "Created releases/AWV-v${VERSION}.zip"
 
+echo "Build successful! AWV is now in your Applications folder and packaged for release."

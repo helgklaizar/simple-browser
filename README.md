@@ -20,6 +20,7 @@
 - **Aggressive Ad-Blocking**: Built-in surgical content blockers utilizing compiled rule lists alongside custom localized DOM observers.
 - **SPA-Aware Architecture**: Advanced context-aware proxy. Blocks intensive autoplays on Home Pages (like Twitch) but seamlessly permits content on inner routes. 
 - **Distraction-Free Mode**: Immersive mode right out of the box with `HiddenTitleBarWindowStyle`. No clutter.
+- **Custom User Agent**: Easily spoof user agent strings via custom configuration to bypass anti-bot detections.
 - **Keyboard & Native Driven**: Deep shortcuts (`Cmd+`/`Cmd-`), Middle-click isolation for window spawning, and fluid navigation.
 
 ## 🕹 Quick Start
